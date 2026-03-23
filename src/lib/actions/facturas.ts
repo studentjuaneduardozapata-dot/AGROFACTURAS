@@ -16,6 +16,7 @@ export type FacturaDetallada = Factura & {
   proveedores: Proveedor | null
   lineas_factura: LineaFactura[]
   distribuciones_costo: DistribucionCosto[]
+  ordenes_compra: import('@/lib/supabase/types').OrdenCompra[]
 }
 
 export interface LineaEditable {
@@ -97,7 +98,7 @@ export async function getFactura(id: string): Promise<FacturaDetallada | null> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('facturas')
-    .select('*, proveedores(*), lineas_factura(*), distribuciones_costo(*)')
+    .select('*, proveedores(*), lineas_factura(*), distribuciones_costo(*), ordenes_compra(*)')
     .eq('id', id)
     .order('numero_linea', { referencedTable: 'lineas_factura', ascending: true })
     .single()

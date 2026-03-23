@@ -72,7 +72,7 @@ AGROFACTURAS/
     │       ├── proveedores/      ← M5 (Fase 2 ✅ COMPLETO)
     │       │   ├── page.tsx
     │       │   └── _components/proveedores-list.tsx
-    │       ├── creditos/         ← M8 (Fase 3)
+    │       ├── creditos/         ← M8 (Fase 3 ✅ COMPLETO)
     │       └── configuracion/    ← M10 (Fase 1 ✅ COMPLETO)
     │           ├── page.tsx
     │           └── _components/
@@ -171,10 +171,10 @@ npx supabase gen types typescript --project-id <PROJECT_ID> --schema public > sr
 | M3  | Distribución de Centros de Costo | ✅ Completo  | 2    |
 | M4  | Concepto y Categoría             | ✅ Completo  | 2    |
 | M5  | Gestión de Proveedores           | ✅ Completo  | 2    |
-| M6  | Generación de Orden de Compra    | ⏳ Pendiente | 3    |
-| M7  | Sistema de Impresión             | ⏳ Pendiente | 3    |
-| M8  | Seguimiento de Créditos          | ⏳ Pendiente | 3    |
-| M9  | Dashboard                        | ⏳ Pendiente | 3    |
+| M6  | Generación de Orden de Compra    | ✅ Completo  | 3    |
+| M7  | Sistema de Impresión             | ✅ Completo  | 3    |
+| M8  | Seguimiento de Créditos          | ✅ Completo  | 3    |
+| M9  | Dashboard                        | ✅ Completo  | 3    |
 
 ---
 

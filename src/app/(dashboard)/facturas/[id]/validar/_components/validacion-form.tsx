@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, Save, CheckCircle, Plus, Trash2, ExternalLink, Loader2 } from 'lucide-react'
+import { ArrowLeft, Save, CheckCircle, Plus, Trash2, ExternalLink, Loader2, FileOutput } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,6 +21,7 @@ import {
   type DistribucionEditable,
   type ConceptoItem,
 } from '@/lib/actions/facturas'
+import { generarOrdenCompra } from '@/lib/actions/ordenes'
 import type { CentroCostoConSubs } from '@/lib/supabase/types'
 
 function formatCOP(value: number | null) {
@@ -209,6 +210,20 @@ export function ValidacionForm({ factura, centros }: ValidacionFormProps) {
   }
 
   const yaValidada = factura.estado === 'validada' || factura.estado === 'vinculada'
+  const yaVinculada = factura.estado === 'vinculada'
+  const ocExistente = factura.ordenes_compra?.[0]
+
+  async function handleGenerarOC() {
+    startTransition(async () => {
+      const result = await generarOrdenCompra(factura.id)
+      if ('error' in result) {
+        toast.error(result.error)
+      } else {
+        toast.success(`OC ${result.numeroOc} generada correctamente`)
+        router.push(`/facturas/${factura.id}/oc`)
+      }
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -253,7 +268,7 @@ export function ValidacionForm({ factura, centros }: ValidacionFormProps) {
             {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
             Guardar
           </Button>
-          {!yaValidada && (
+          {!yaVinculada && !yaValidada && (
             <Button
               size="sm"
               onClick={() => handleSave(true)}
@@ -263,6 +278,27 @@ export function ValidacionForm({ factura, centros }: ValidacionFormProps) {
               {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
               Validar
             </Button>
+          )}
+
+          {factura.estado === 'validada' && !ocExistente && (
+            <Button
+              size="sm"
+              onClick={handleGenerarOC}
+              disabled={isPending}
+              className="gap-2 bg-[#4a8a35] hover:bg-[#3a6a28]"
+            >
+              {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileOutput className="h-3.5 w-3.5" />}
+              Generar OC
+            </Button>
+          )}
+
+          {(yaVinculada || ocExistente) && (
+            <Link href={`/facturas/${factura.id}/oc`} target="_blank">
+              <Button size="sm" variant="outline" className="gap-2 border-[#6ab04c] text-[#4a8a35]">
+                <FileOutput className="h-3.5 w-3.5" />
+                Ver / Imprimir OC
+              </Button>
+            </Link>
           )}
         </div>
       </div>
