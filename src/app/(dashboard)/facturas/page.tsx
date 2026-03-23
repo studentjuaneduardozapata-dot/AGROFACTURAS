@@ -1,33 +1,50 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileText } from 'lucide-react'
+import { getFacturas } from '@/lib/actions/facturas'
+import { FacturasList } from './_components/facturas-list'
+import { UploadDialog } from './_components/upload-dialog'
 
-export default function FacturasPage() {
+export default async function FacturasPage() {
+  const facturas = await getFacturas()
+
+  const total = facturas.length
+  const extraidas = facturas.filter((f) => f.estado === 'extraida').length
+  const validadas = facturas.filter((f) => f.estado === 'validada').length
+  const errores = facturas.filter((f) => f.estado === 'error').length
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Facturas</h2>
-        <p className="text-muted-foreground">Gestión y procesamiento de facturas electrónicas</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Facturas</h2>
+          <p className="text-muted-foreground">
+            Ingesta y validación de facturas electrónicas
+          </p>
+        </div>
+        <UploadDialog />
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#eaf5e4] rounded-lg">
-              <FileText className="h-6 w-6 text-[#4a8a35]" />
-            </div>
-            <div>
-              <CardTitle>Módulo de Facturas</CardTitle>
-              <CardDescription>Disponible en Fase 2</CardDescription>
-            </div>
+      {/* KPIs rápidos */}
+      {total > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="border rounded-lg p-3 bg-card">
+            <p className="text-xs text-muted-foreground">Total</p>
+            <p className="text-2xl font-bold">{total}</p>
           </div>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Este módulo incluirá: subida de PDFs con drag &amp; drop, procesamiento IA con Gemini,
-            validación human-in-the-loop, distribución de centros de costo, y generación de órdenes de compra.
-          </p>
-        </CardContent>
-      </Card>
+          <div className="border rounded-lg p-3 bg-card">
+            <p className="text-xs text-muted-foreground">Por validar</p>
+            <p className="text-2xl font-bold text-yellow-600">{extraidas}</p>
+          </div>
+          <div className="border rounded-lg p-3 bg-card">
+            <p className="text-xs text-muted-foreground">Validadas</p>
+            <p className="text-2xl font-bold text-blue-600">{validadas}</p>
+          </div>
+          <div className="border rounded-lg p-3 bg-card">
+            <p className="text-xs text-muted-foreground">Con error</p>
+            <p className="text-2xl font-bold text-red-600">{errores}</p>
+          </div>
+        </div>
+      )}
+
+      <FacturasList facturas={facturas} />
     </div>
   )
 }

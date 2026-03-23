@@ -57,8 +57,21 @@ AGROFACTURAS/
     │   └── (dashboard)/
     │       ├── layout.tsx        ← Sidebar + Topbar (verifica auth)
     │       ├── page.tsx          ← Dashboard (KPIs en Fase 3)
-    │       ├── facturas/         ← M1+M2+M3+M4 (Fase 2)
-    │       ├── proveedores/      ← M5 (Fase 2)
+    │       ├── facturas/         ← M1+M2+M3+M4 (Fase 2 ✅ COMPLETO)
+    │       │   ├── page.tsx      ← Lista + KPIs + upload
+    │       │   ├── _components/
+    │       │   │   ├── facturas-list.tsx   ← Tabla con filtros
+    │       │   │   ├── upload-dialog.tsx   ← Modal drag&drop PDF
+    │       │   │   └── estado-badge.tsx    ← Badges de estado
+    │       │   └── [id]/validar/
+    │       │       ├── page.tsx  ← Server: fetch factura + centros
+    │       │       └── _components/
+    │       │           ├── validacion-form.tsx     ← Form principal (client)
+    │       │           ├── lineas-table.tsx         ← Líneas editables
+    │       │           └── distribucion-costo.tsx   ← M3: centros de costo
+    │       ├── proveedores/      ← M5 (Fase 2 ✅ COMPLETO)
+    │       │   ├── page.tsx
+    │       │   └── _components/proveedores-list.tsx
     │       ├── creditos/         ← M8 (Fase 3)
     │       └── configuracion/    ← M10 (Fase 1 ✅ COMPLETO)
     │           ├── page.tsx
@@ -73,6 +86,8 @@ AGROFACTURAS/
     │   ├── topbar.tsx            ← Barra superior
     │   └── ui/                  ← Componentes shadcn/ui (auto-generados)
     └── lib/
+        ├── ai/
+        │   └── gemini.ts        ← Servicio Gemini 2.5 Flash con failover (M-IA)
         ├── supabase/
         │   ├── client.ts         ← Browser client
         │   ├── server.ts         ← Server client (async cookies)
@@ -80,7 +95,9 @@ AGROFACTURAS/
         │   └── types.ts         ← Tipos TypeScript del schema
         └── actions/
             ├── auth.ts           ← login(), logout()
-            └── configuracion.ts  ← CRUD centros, sub-centros, config
+            ├── configuracion.ts  ← CRUD centros, sub-centros, config
+            ├── facturas.ts       ← getFacturas, getFactura, saveValidacion, deleteFactura
+            └── proveedores.ts    ← getProveedores, updateProveedor, deleteProveedor
 ```
 
 ---
@@ -148,12 +165,12 @@ npx supabase gen types typescript --project-id <PROJECT_ID> --schema public > sr
 | ID  | Módulo                           | Estado      | Fase |
 |-----|----------------------------------|-------------|------|
 | M10 | Configuración                    | ✅ Completo  | 1    |
-| M-IA| Servicio Gemini con failover     | ⏳ Pendiente | 2    |
-| M1  | Ingesta de documentos            | ⏳ Pendiente | 2    |
-| M2  | Validación Human-in-the-Loop     | ⏳ Pendiente | 2    |
-| M3  | Distribución de Centros de Costo | ⏳ Pendiente | 2    |
-| M4  | Concepto y Categoría             | ⏳ Pendiente | 2    |
-| M5  | Gestión de Proveedores           | ⏳ Pendiente | 2    |
+| M-IA| Servicio Gemini con failover     | ✅ Completo  | 2    |
+| M1  | Ingesta de documentos            | ✅ Completo  | 2    |
+| M2  | Validación Human-in-the-Loop     | ✅ Completo  | 2    |
+| M3  | Distribución de Centros de Costo | ✅ Completo  | 2    |
+| M4  | Concepto y Categoría             | ✅ Completo  | 2    |
+| M5  | Gestión de Proveedores           | ✅ Completo  | 2    |
 | M6  | Generación de Orden de Compra    | ⏳ Pendiente | 3    |
 | M7  | Sistema de Impresión             | ⏳ Pendiente | 3    |
 | M8  | Seguimiento de Créditos          | ⏳ Pendiente | 3    |
