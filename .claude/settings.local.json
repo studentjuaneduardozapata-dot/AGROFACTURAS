@@ -21,7 +21,8 @@
       "Bash(npm install:*)",
       "Bash(npx shadcn@latest init --defaults)",
       "Bash(npx shadcn@latest add input card table dialog select tabs label badge sonner sidebar dropdown-menu separator switch sheet --yes)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(npx shadcn@latest add textarea scroll-area --yes)"
     ]
   }
 }
