@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(npm -v)",
+      "Bash(npx --version)",
+      "Bash(npm view:*)",
+      "Bash(npx supabase:*)",
+      "Bash(mkdir -p _temp)",
+      "Bash(mv logo.svg gemini-prompt.md Formato_Orden_De_Compra.pdf _temp/)",
+      "Bash(npx create-next-app@15 . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --yes)",
+      "Read(//c/Users/Juan Eduardo/Videos/**)",
+      "Bash(npx create-next-app@15 agrofacturas-temp --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --yes)",
+      "Bash(cp -r agrofacturas-temp/. AGROFACTURAS/)",
+      "Bash(rm -rf agrofacturas-temp)",
+      "Bash(mkdir -p docs public supabase)",
+      "Bash(mv _temp/logo.svg public/logo.svg)",
+      "Bash(mv _temp/gemini-prompt.md docs/gemini-prompt.md)",
+      "Bash(mv _temp/Formato_Orden_De_Compra.pdf \"docs/Formato_Orden_De_Compra.pdf\")",
+      "Bash(rm -rf _temp)",
+      "Bash(npm install:*)",
+      "Bash(npx shadcn@latest init --defaults)"
+    ]
+  }
+}
