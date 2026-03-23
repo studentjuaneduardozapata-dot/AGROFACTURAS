@@ -19,7 +19,9 @@
       "Bash(mv _temp/Formato_Orden_De_Compra.pdf \"docs/Formato_Orden_De_Compra.pdf\")",
       "Bash(rm -rf _temp)",
       "Bash(npm install:*)",
-      "Bash(npx shadcn@latest init --defaults)"
+      "Bash(npx shadcn@latest init --defaults)",
+      "Bash(npx shadcn@latest add input card table dialog select tabs label badge sonner sidebar dropdown-menu separator switch sheet --yes)",
+      "Bash(npm run:*)"
     ]
   }
 }
