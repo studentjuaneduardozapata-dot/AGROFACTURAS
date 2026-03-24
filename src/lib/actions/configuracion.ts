@@ -2,11 +2,22 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import type { CentroCostoConSubs, DatosEmpresa, SolicitanteDefault, AutorizadorDefault } from '@/lib/supabase/types'
+import type { CentroCosto, CentroCostoConSubs, DatosEmpresa, SolicitanteDefault, AutorizadorDefault, ConceptoConfig } from '@/lib/supabase/types'
 
 // -------------------------------------------------------
 // CENTROS DE COSTO
 // -------------------------------------------------------
+
+export async function getCentrosCostoSimple(): Promise<CentroCosto[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('centros_costo')
+    .select('id, nombre, color, activo')
+    .order('nombre')
+
+  if (error) throw new Error(error.message)
+  return (data ?? []) as CentroCosto[]
+}
 
 export async function getCentrosCosto(): Promise<CentroCostoConSubs[]> {
   const supabase = await createClient()
@@ -153,6 +164,29 @@ export async function deleteSubCentro(id: string) {
 
   revalidatePath('/configuracion')
   return { success: true }
+}
+
+// -------------------------------------------------------
+// CONCEPTOS
+// -------------------------------------------------------
+
+export async function getConceptos(): Promise<ConceptoConfig[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('configuracion')
+    .select('valor')
+    .eq('clave', 'conceptos')
+    .single()
+
+  if (!data) return []
+  return (data.valor as ConceptoConfig[]) ?? []
+}
+
+export async function saveConceptos(conceptos: ConceptoConfig[]) {
+  const result = await upsertConfiguracion('conceptos', conceptos as unknown as object)
+  revalidatePath('/configuracion')
+  revalidatePath('/facturas')
+  return result
 }
 
 // -------------------------------------------------------

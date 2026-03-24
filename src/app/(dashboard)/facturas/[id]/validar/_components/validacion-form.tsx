@@ -22,7 +22,7 @@ import {
   type ConceptoItem,
 } from '@/lib/actions/facturas'
 import { generarOrdenCompra } from '@/lib/actions/ordenes'
-import type { CentroCostoConSubs } from '@/lib/supabase/types'
+import type { CentroCosto, ConceptoConfig } from '@/lib/supabase/types'
 
 function formatCOP(value: number | null) {
   if (value === null || value === undefined) return '—'
@@ -47,10 +47,11 @@ const CATEGORIAS = [
 
 interface ValidacionFormProps {
   factura: FacturaDetallada
-  centros: CentroCostoConSubs[]
+  centros: CentroCosto[]
+  conceptos: ConceptoConfig[]
 }
 
-export function ValidacionForm({ factura, centros }: ValidacionFormProps) {
+export function ValidacionForm({ factura, centros, conceptos }: ValidacionFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -109,11 +110,10 @@ export function ValidacionForm({ factura, centros }: ValidacionFormProps) {
     }))
   )
 
-  // Concepto y categoría (pre-cargados desde memoria del proveedor si no hay distribuciones)
+  // Concepto y categoría
+  const conceptosActivos = conceptos.filter((c) => c.activo)
   const proveedorConcepto = proveedor?.ultimo_concepto as ConceptoItem[] | null
-  const [concepto, setConcepto] = useState<ConceptoItem[]>(
-    proveedorConcepto ?? []
-  )
+  const [concepto, setConcepto] = useState<ConceptoItem[]>(proveedorConcepto ?? [])
   const [categoria, setCategoria] = useState(proveedor?.ultima_categoria ?? '')
 
   // --- Validaciones ---
@@ -200,13 +200,66 @@ export function ValidacionForm({ factura, centros }: ValidacionFormProps) {
 
   // Concepto helpers
   function addConcepto() {
-    setConcepto([...concepto, { concepto: '', porcentaje: 0 }])
+    if (concepto.length >= conceptosActivos.length && conceptosActivos.length > 0) return
+    const newN = concepto.length + 1
+    const perItem = parseFloat((100 / newN).toFixed(2))
+    let assigned = 0
+    const adjusted = concepto.map((c, i) => {
+      const isLast = i === concepto.length - 1
+      const pct = isLast ? parseFloat((100 - perItem - assigned).toFixed(2)) : perItem
+      if (!isLast) assigned += perItem
+      return { ...c, porcentaje: pct }
+    })
+    setConcepto([...adjusted, { concepto: '', porcentaje: perItem }])
   }
+
   function removeConcepto(i: number) {
-    setConcepto(concepto.filter((_, idx) => idx !== i))
+    const remaining = concepto.filter((_, idx) => idx !== i)
+    if (remaining.length === 0) {
+      setConcepto([])
+      return
+    }
+    const perItem = parseFloat((100 / remaining.length).toFixed(2))
+    let assigned = 0
+    setConcepto(
+      remaining.map((c, idx) => {
+        const isLast = idx === remaining.length - 1
+        const pct = isLast ? parseFloat((100 - assigned).toFixed(2)) : perItem
+        if (!isLast) assigned += perItem
+        return { ...c, porcentaje: pct }
+      })
+    )
   }
-  function updateConcepto(i: number, field: keyof ConceptoItem, value: string | number) {
-    setConcepto(concepto.map((c, idx) => (idx === i ? { ...c, [field]: value } : c)))
+
+  function updateConceptoNombre(i: number, value: string) {
+    setConcepto(concepto.map((c, idx) => (idx === i ? { ...c, concepto: value } : c)))
+  }
+
+  function updateConceptoPorcentaje(index: number, newVal: number) {
+    const clamped = Math.min(100, Math.max(0, newVal))
+    const n = concepto.length
+
+    if (n <= 1) {
+      setConcepto(concepto.map((c, i) => (i === index ? { ...c, porcentaje: clamped } : c)))
+      return
+    }
+
+    const remaining = Math.max(0, 100 - clamped)
+    const perOther = parseFloat((remaining / (n - 1)).toFixed(2))
+    const others = concepto.filter((_, i) => i !== index)
+    let distributed = 0
+
+    setConcepto(
+      concepto.map((c, i) => {
+        if (i === index) return { ...c, porcentaje: clamped }
+        const isLast = c === others[others.length - 1]
+        const pct = isLast
+          ? parseFloat((remaining - distributed).toFixed(2))
+          : perOther
+        if (!isLast) distributed += perOther
+        return { ...c, porcentaje: pct }
+      })
+    )
   }
 
   const yaValidada = factura.estado === 'validada' || factura.estado === 'vinculada'
@@ -220,7 +273,7 @@ export function ValidacionForm({ factura, centros }: ValidacionFormProps) {
         toast.error(result.error)
       } else {
         toast.success(`OC ${result.numeroOc} generada correctamente`)
-        router.push(`/facturas/${factura.id}/oc`)
+        router.push(`/oc/${factura.id}`)
       }
     })
   }
@@ -293,7 +346,7 @@ export function ValidacionForm({ factura, centros }: ValidacionFormProps) {
           )}
 
           {(yaVinculada || ocExistente) && (
-            <Link href={`/facturas/${factura.id}/oc`} target="_blank">
+            <Link href={`/oc/${factura.id}`} target="_blank">
               <Button size="sm" variant="outline" className="gap-2 border-[#6ab04c] text-[#4a8a35]">
                 <FileOutput className="h-3.5 w-3.5" />
                 Ver / Imprimir OC
@@ -480,7 +533,7 @@ export function ValidacionForm({ factura, centros }: ValidacionFormProps) {
               <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
                 Centros de Costo
               </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Máx. 5 · Debe sumar 100%</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Máx. 4 · Debe sumar 100%</p>
             </div>
             <DistribucionCosto
               distribuciones={distribuciones}
@@ -515,30 +568,46 @@ export function ValidacionForm({ factura, centros }: ValidacionFormProps) {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs">Concepto (desglose %)</Label>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={addConcepto}
-                  className="h-6 text-xs gap-1"
-                >
-                  <Plus className="h-3 w-3" /> Agregar
-                </Button>
+                {conceptosActivos.length > 0 && concepto.length < conceptosActivos.length && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={addConcepto}
+                    className="h-6 text-xs gap-1"
+                  >
+                    <Plus className="h-3 w-3" /> Agregar
+                  </Button>
+                )}
               </div>
-              {concepto.length === 0 && (
+
+              {conceptosActivos.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Sin conceptos configurados. Ve a Configuración → Conceptos.
+                </p>
+              )}
+
+              {concepto.length === 0 && conceptosActivos.length > 0 && (
                 <p className="text-xs text-muted-foreground">Sin desglose de concepto.</p>
               )}
+
               {concepto.map((c, i) => (
                 <div key={i} className="flex gap-2 items-center">
-                  <Input
+                  <select
                     value={c.concepto}
-                    onChange={(e) => updateConcepto(i, 'concepto', e.target.value)}
-                    placeholder="Ej: Mano de obra"
-                    className="flex-1 h-8 text-xs"
-                  />
+                    onChange={(e) => updateConceptoNombre(i, e.target.value)}
+                    className="flex-1 h-8 text-xs border rounded-md px-2 bg-background outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Seleccionar...</option>
+                    {conceptosActivos.map((con) => (
+                      <option key={con.id} value={con.nombre}>
+                        {con.nombre}
+                      </option>
+                    ))}
+                  </select>
                   <Input
                     type="number"
                     value={c.porcentaje}
-                    onChange={(e) => updateConcepto(i, 'porcentaje', parseFloat(e.target.value) || 0)}
+                    onChange={(e) => updateConceptoPorcentaje(i, parseFloat(e.target.value) || 0)}
                     className="w-16 h-8 text-xs text-right"
                     min={0}
                     max={100}

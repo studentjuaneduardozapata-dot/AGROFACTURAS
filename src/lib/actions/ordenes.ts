@@ -39,24 +39,40 @@ export interface OCPageData {
 export async function getOrdenCompraData(facturaId: string): Promise<OCPageData | null> {
   const supabase = await createClient()
 
-  const [facturaRes, empresaRes] = await Promise.all([
+  const [facturaRes, ocRes, empresaRes] = await Promise.all([
     supabase
       .from('facturas')
-      .select('*, proveedores(*), lineas_factura(*), distribuciones_costo(*), ordenes_compra(*)')
+      .select('*, proveedores(*), lineas_factura(*), distribuciones_costo(*)')
       .eq('id', facturaId)
-      .order('numero_linea', { referencedTable: 'lineas_factura', ascending: true })
+      .single(),
+    supabase
+      .from('ordenes_compra')
+      .select('*')
+      .eq('factura_id', facturaId)
       .single(),
     supabase.from('configuracion').select('valor').eq('clave', 'datos_empresa').single(),
   ])
 
-  if (facturaRes.error || !facturaRes.data) return null
+  if (facturaRes.error || !facturaRes.data) {
+    console.error('[getOrdenCompraData] Error fetching factura:', facturaRes.error)
+    return null
+  }
 
-  const factura = facturaRes.data as FacturaParaOC
-  const oc = factura.ordenes_compra?.[0]
-  if (!oc) return null
+  if (ocRes.error || !ocRes.data) {
+    console.error('[getOrdenCompraData] Error fetching OC:', ocRes.error)
+    return null
+  }
+
+  const factura = facturaRes.data as Omit<FacturaParaOC, 'ordenes_compra'>
+  const oc = ocRes.data as OrdenCompra
+
+  // Ordenar líneas
+  if (Array.isArray(factura.lineas_factura)) {
+    factura.lineas_factura.sort((a, b) => (a.numero_linea ?? 0) - (b.numero_linea ?? 0))
+  }
 
   return {
-    factura,
+    factura: factura as FacturaParaOC,
     oc,
     empresa: (empresaRes.data?.valor as DatosEmpresaConfig) ?? null,
   }

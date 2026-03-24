@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Upload, FileText, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,80 +20,101 @@ function formatBytes(bytes: number) {
 
 export function UploadDialog() {
   const [open, setOpen] = useState(false)
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [status, setStatus] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
-  function handleFileSelect(selected: File | null) {
+  function handleFilesSelect(selected: FileList | null) {
     if (!selected) return
-    if (selected.type !== 'application/pdf') {
-      setError('Solo se aceptan archivos PDF')
-      return
+    const invalid: string[] = []
+    const valid: File[] = []
+
+    Array.from(selected).forEach((f) => {
+      if (f.type !== 'application/pdf') {
+        invalid.push(`"${f.name}": solo PDF`)
+      } else if (f.size > 15 * 1024 * 1024) {
+        invalid.push(`"${f.name}": supera 15 MB`)
+      } else {
+        valid.push(f)
+      }
+    })
+
+    if (valid.length > 0) {
+      setFiles((prev) => {
+        const names = new Set(prev.map((f) => f.name))
+        return [...prev, ...valid.filter((f) => !names.has(f.name))]
+      })
     }
-    if (selected.size > 15 * 1024 * 1024) {
-      setError('El archivo no puede superar 15 MB')
-      return
+    if (invalid.length > 0) {
+      setError(invalid.join(' · '))
+    } else {
+      setError(null)
     }
-    setFile(selected)
-    setError(null)
+  }
+
+  function removeFile(name: string) {
+    setFiles((prev) => prev.filter((f) => f.name !== name))
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     setIsDragging(false)
-    const dropped = e.dataTransfer.files[0]
-    handleFileSelect(dropped)
+    handleFilesSelect(e.dataTransfer.files)
   }
 
   async function handleUpload() {
-    if (!file) return
+    if (files.length === 0) return
     setLoading(true)
     setError(null)
-    setStatus('Subiendo archivo...')
+    const total = files.length
 
-    try {
-      const formData = new FormData()
-      formData.append('pdf', file)
-
-      setStatus('Extrayendo datos con IA...')
-      const res = await fetch('/api/facturas/upload', {
-        method: 'POST',
-        body: formData,
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      setProgress({ current: i + 1, total })
+      toast.loading(`Procesando factura ${i + 1}/${total}: ${file.name}`, {
+        id: 'upload-progress',
       })
 
-      const data = await res.json()
+      try {
+        const formData = new FormData()
+        formData.append('pdf', file)
 
-      if (!res.ok) {
-        if (res.status === 409 && data.facturaId) {
-          // Duplicado — redirigir a la factura existente
-          setOpen(false)
-          router.push(`/facturas/${data.facturaId}/validar`)
-          return
+        const res = await fetch('/api/facturas/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        const data = await res.json()
+
+        if (res.status === 409) {
+          toast.warning(`${file.name}: ya existe (duplicada)`, { duration: 4000 })
+        } else if (!res.ok) {
+          toast.error(`${file.name}: ${data.error ?? 'Error desconocido'}`, { duration: 5000 })
+        } else {
+          toast.success(`${file.name} procesada correctamente`, { duration: 3000 })
         }
-        throw new Error(data.error ?? 'Error al procesar la factura')
+      } catch {
+        toast.error(`${file.name}: error de conexión`, { duration: 5000 })
       }
-
-      setStatus('¡Completado!')
-      setOpen(false)
-      router.push(`/facturas/${data.facturaId}/validar`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido')
-      setStatus('')
-    } finally {
-      setLoading(false)
     }
+
+    toast.dismiss('upload-progress')
+    setLoading(false)
+    setProgress(null)
+    setOpen(false)
+    router.refresh()
   }
 
   function handleClose() {
     if (loading) return
     setOpen(false)
-    setFile(null)
+    setFiles([])
     setError(null)
-    setStatus('')
+    setProgress(null)
   }
 
   return (
@@ -107,84 +129,106 @@ export function UploadDialog() {
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Subir Factura PDF</DialogTitle>
+            <DialogTitle>Subir Facturas PDF</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
             {/* Zona de drop */}
-            {!file && (
-              <div
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
-                  isDragging
-                    ? 'border-primary bg-primary/5'
-                    : 'border-muted-foreground/25 hover:border-primary/50'
-                }`}
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                <p className="text-sm font-medium">Arrastra el PDF aquí</p>
-                <p className="text-xs text-muted-foreground mt-1">o haz clic para seleccionar</p>
-                <p className="text-xs text-muted-foreground mt-1">Máximo 15 MB</p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  className="hidden"
-                  onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            )}
+            <div
+              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                isDragging
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted-foreground/25 hover:border-primary/50'
+              }`}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => !loading && fileInputRef.current?.click()}
+            >
+              <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm font-medium">Arrastra PDFs aquí</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                o haz clic para seleccionar · Máx. 15 MB por archivo
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                multiple
+                className="hidden"
+                onChange={(e) => handleFilesSelect(e.target.files)}
+              />
+            </div>
 
-            {/* Archivo seleccionado */}
-            {file && !loading && (
-              <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
-                <FileText className="h-8 w-8 text-primary shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{file.name}</p>
-                  <p className="text-xs text-muted-foreground">{formatBytes(file.size)}</p>
-                </div>
-                <button
-                  onClick={() => { setFile(null); setError(null) }}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+            {/* Lista de archivos seleccionados */}
+            {files.length > 0 && !loading && (
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {files.map((file) => (
+                  <div
+                    key={file.name}
+                    className="flex items-center gap-2 p-2 border rounded-lg bg-muted/30"
+                  >
+                    <FileText className="h-5 w-5 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{file.name}</p>
+                      <p className="text-xs text-muted-foreground">{formatBytes(file.size)}</p>
+                    </div>
+                    <button
+                      onClick={() => removeFile(file.name)}
+                      className="text-muted-foreground hover:text-foreground shrink-0"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
 
             {/* Estado de carga */}
-            {loading && (
-              <div className="flex flex-col items-center gap-3 py-4">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">{status}</p>
-                <p className="text-xs text-muted-foreground text-center">
-                  Gemini está analizando la factura. Esto puede tomar 20-60 segundos.
+            {loading && progress && (
+              <div className="flex flex-col items-center gap-2 py-3">
+                <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                <p className="text-sm font-medium">
+                  Procesando factura {progress.current}/{progress.total}
                 </p>
+                <p className="text-xs text-muted-foreground text-center">
+                  Gemini está analizando el PDF. Puede tomar 20-60 segundos por archivo.
+                </p>
+                <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                  />
+                </div>
               </div>
             )}
 
             {/* Error */}
             {error && (
-              <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded p-3">
+              <div className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded p-2.5">
                 {error}
               </div>
             )}
 
             {/* Acciones */}
             {!loading && (
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={handleClose}>Cancelar</Button>
-                <Button
-                  onClick={handleUpload}
-                  disabled={!file}
-                  className="gap-2"
-                >
-                  <Upload className="h-4 w-4" />
-                  Subir y procesar
-                </Button>
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {files.length > 0
+                    ? `${files.length} archivo${files.length !== 1 ? 's' : ''} seleccionado${files.length !== 1 ? 's' : ''}`
+                    : ''}
+                </span>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={handleClose}>Cancelar</Button>
+                  <Button
+                    onClick={handleUpload}
+                    disabled={files.length === 0}
+                    className="gap-2"
+                  >
+                    <Upload className="h-4 w-4" />
+                    {files.length > 1 ? `Subir ${files.length} facturas` : 'Subir y procesar'}
+                  </Button>
+                </div>
               </div>
             )}
           </div>

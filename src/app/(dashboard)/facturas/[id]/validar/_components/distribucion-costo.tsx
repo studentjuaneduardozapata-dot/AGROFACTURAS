@@ -4,11 +4,13 @@ import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { DistribucionEditable } from '@/lib/actions/facturas'
-import type { CentroCostoConSubs } from '@/lib/supabase/types'
+import type { CentroCosto } from '@/lib/supabase/types'
+
+const MAX = 4
 
 interface DistribucionCostoProps {
   distribuciones: DistribucionEditable[]
-  centros: CentroCostoConSubs[]
+  centros: CentroCosto[]
   totalNeto: number
   onChange: (distribuciones: DistribucionEditable[]) => void
 }
@@ -28,53 +30,93 @@ export function DistribucionCosto({
   onChange,
 }: DistribucionCostoProps) {
   const totalPorcentaje = distribuciones.reduce((sum, d) => sum + d.porcentaje, 0)
-  const restante = 100 - totalPorcentaje
-  const puedeAgregar = distribuciones.length < 5 && totalPorcentaje < 100
-
-  // Solo centros activos
   const centrosActivos = centros.filter((c) => c.activo)
+  const puedeAgregar = distribuciones.length < MAX && totalPorcentaje < 100
 
   function addDistribucion() {
+    const newN = distribuciones.length + 1
+    const perItem = parseFloat((100 / newN).toFixed(2))
+    // Redistribuir existentes equitativamente
+    let assigned = 0
+    const adjusted = distribuciones.map((d, i) => {
+      const isLast = i === distribuciones.length - 1
+      const pct = isLast ? parseFloat((100 - perItem - assigned).toFixed(2)) : perItem
+      if (!isLast) assigned += perItem
+      return { ...d, porcentaje: pct, monto: (pct / 100) * totalNeto }
+    })
     onChange([
-      ...distribuciones,
+      ...adjusted,
       {
         localId: `d-${Date.now()}`,
         centro_costo: '',
         sub_centro: '',
-        porcentaje: Math.max(0, restante),
-        monto: (Math.max(0, restante) / 100) * totalNeto,
+        porcentaje: perItem,
+        monto: (perItem / 100) * totalNeto,
       },
     ])
   }
 
   function removeDistribucion(localId: string) {
-    onChange(distribuciones.filter((d) => d.localId !== localId))
+    const remaining = distribuciones.filter((d) => d.localId !== localId)
+    // Redistribuir porcentajes equitativamente entre los restantes
+    if (remaining.length === 0) {
+      onChange([])
+      return
+    }
+    const perItem = parseFloat((100 / remaining.length).toFixed(2))
+    let assigned = 0
+    const adjusted = remaining.map((d, i) => {
+      const isLast = i === remaining.length - 1
+      const pct = isLast ? parseFloat((100 - assigned).toFixed(2)) : perItem
+      if (!isLast) assigned += perItem
+      return { ...d, porcentaje: pct, monto: (pct / 100) * totalNeto }
+    })
+    onChange(adjusted)
   }
 
-  function updateDistribucion(
-    localId: string,
-    field: 'centro_costo' | 'sub_centro' | 'porcentaje',
-    value: string | number
-  ) {
+  function updateCentro(localId: string, centro_costo: string) {
+    onChange(
+      distribuciones.map((d) =>
+        d.localId === localId ? { ...d, centro_costo } : d
+      )
+    )
+  }
+
+  function updatePorcentaje(localId: string, newVal: number) {
+    const clamped = Math.min(100, Math.max(0, newVal))
+    const n = distribuciones.length
+
+    if (n <= 1) {
+      onChange(
+        distribuciones.map((d) =>
+          d.localId === localId
+            ? { ...d, porcentaje: clamped, monto: (clamped / 100) * totalNeto }
+            : d
+        )
+      )
+      return
+    }
+
+    const remaining = Math.max(0, 100 - clamped)
+    const perOther = parseFloat((remaining / (n - 1)).toFixed(2))
+    const others = distribuciones.filter((d) => d.localId !== localId)
+    let distributed = 0
+
     onChange(
       distribuciones.map((d) => {
-        if (d.localId !== localId) return d
-        const updated = { ...d, [field]: value }
-        // Si cambia el centro, limpiar sub_centro
-        if (field === 'centro_costo') updated.sub_centro = ''
-        // Recalcular monto
-        updated.monto = (updated.porcentaje / 100) * totalNeto
-        return updated
+        if (d.localId === localId) {
+          return { ...d, porcentaje: clamped, monto: (clamped / 100) * totalNeto }
+        }
+        const isLast = d === others[others.length - 1]
+        const pct = isLast
+          ? parseFloat((remaining - distributed).toFixed(2))
+          : perOther
+        if (!isLast) distributed += perOther
+        return { ...d, porcentaje: pct, monto: (pct / 100) * totalNeto }
       })
     )
   }
 
-  const getSubCentros = (centroNombre: string) => {
-    const centro = centrosActivos.find((c) => c.nombre === centroNombre)
-    return centro?.sub_centros.filter((s) => s.activo) ?? []
-  }
-
-  // Color de la barra de progreso
   const barColor =
     totalPorcentaje === 100
       ? 'bg-green-500'
@@ -109,7 +151,7 @@ export function DistribucionCosto({
         {totalPorcentaje !== 100 && distribuciones.length > 0 && (
           <p className="text-xs text-muted-foreground">
             {totalPorcentaje < 100
-              ? `Faltan ${restante.toFixed(1)}% por asignar`
+              ? `Faltan ${(100 - totalPorcentaje).toFixed(1)}% por asignar`
               : 'El total supera el 100%'}
           </p>
         )}
@@ -122,74 +164,55 @@ export function DistribucionCosto({
             Sin distribución asignada. Agrega un centro de costo.
           </p>
         )}
-        {distribuciones.map((dist) => {
-          const subCentros = getSubCentros(dist.centro_costo)
-          return (
-            <div
-              key={dist.localId}
-              className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center"
+        {distribuciones.map((dist) => (
+          <div
+            key={dist.localId}
+            className="grid grid-cols-[1fr_auto_auto] gap-2 items-center"
+          >
+            {/* Centro de costo */}
+            <select
+              value={dist.centro_costo}
+              onChange={(e) => updateCentro(dist.localId, e.target.value)}
+              className="h-9 text-sm border rounded-md px-2 bg-background outline-none focus:ring-2 focus:ring-ring"
             >
-              {/* Centro de costo */}
-              <select
-                value={dist.centro_costo}
-                onChange={(e) => updateDistribucion(dist.localId, 'centro_costo', e.target.value)}
-                className="h-9 text-sm border rounded-md px-2 bg-background outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="">Seleccionar centro...</option>
-                {centrosActivos.map((c) => (
-                  <option key={c.id} value={c.nombre}>
-                    {c.nombre}
-                  </option>
-                ))}
-              </select>
+              <option value="">Seleccionar centro...</option>
+              {centrosActivos.map((c) => (
+                <option key={c.id} value={c.nombre}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
 
-              {/* Sub-centro */}
-              <select
-                value={dist.sub_centro}
-                onChange={(e) => updateDistribucion(dist.localId, 'sub_centro', e.target.value)}
-                disabled={subCentros.length === 0}
-                className="h-9 text-sm border rounded-md px-2 bg-background outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-              >
-                <option value="">{subCentros.length === 0 ? '(sin sub-centros)' : 'Sin sub-centro'}</option>
-                {subCentros.map((s) => (
-                  <option key={s.id} value={s.nombre}>
-                    {s.nombre}
-                  </option>
-                ))}
-              </select>
-
-              {/* Porcentaje + Monto */}
-              <div className="flex items-center gap-1">
-                <Input
-                  type="number"
-                  value={dist.porcentaje}
-                  onChange={(e) => {
-                    const val = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0))
-                    updateDistribucion(dist.localId, 'porcentaje', val)
-                  }}
-                  className="h-9 w-20 text-right text-sm"
-                  min={0}
-                  max={100}
-                  step={0.1}
-                />
-                <span className="text-sm text-muted-foreground">%</span>
-              </div>
-
-              {/* Monto + Delete */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-muted-foreground whitespace-nowrap">
-                  {formatCOP(dist.monto)}
-                </span>
-                <button
-                  onClick={() => removeDistribucion(dist.localId)}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
+            {/* Porcentaje + Monto */}
+            <div className="flex items-center gap-1">
+              <Input
+                type="number"
+                value={dist.porcentaje}
+                onChange={(e) =>
+                  updatePorcentaje(dist.localId, parseFloat(e.target.value) || 0)
+                }
+                className="h-9 w-20 text-right text-sm"
+                min={0}
+                max={100}
+                step={0.1}
+              />
+              <span className="text-sm text-muted-foreground">%</span>
             </div>
-          )
-        })}
+
+            {/* Monto + Delete */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono text-muted-foreground whitespace-nowrap">
+                {formatCOP(dist.monto)}
+              </span>
+              <button
+                onClick={() => removeDistribucion(dist.localId)}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
       {puedeAgregar && (
@@ -198,15 +221,14 @@ export function DistribucionCosto({
           size="sm"
           onClick={addDistribucion}
           className="gap-2"
-          disabled={distribuciones.length >= 5}
         >
           <Plus className="h-3.5 w-3.5" />
-          Agregar centro {distribuciones.length >= 5 ? '(máx. 5)' : ''}
+          Agregar centro
         </Button>
       )}
 
-      {distribuciones.length >= 5 && (
-        <p className="text-xs text-muted-foreground">Máximo 5 centros de costo por factura.</p>
+      {distribuciones.length >= MAX && (
+        <p className="text-xs text-muted-foreground">Máximo {MAX} centros de costo por factura.</p>
       )}
     </div>
   )

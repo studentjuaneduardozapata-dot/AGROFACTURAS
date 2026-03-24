@@ -370,3 +370,9 @@ export interface SolicitanteDefault {
 export interface AutorizadorDefault {
   nombre: string
 }
+
+export interface ConceptoConfig {
+  id: string
+  nombre: string
+  activo: boolean
+}
