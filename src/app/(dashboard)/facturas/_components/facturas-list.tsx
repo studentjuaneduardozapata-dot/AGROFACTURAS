@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Eye, Trash2, RefreshCw, Loader2 } from 'lucide-react'
+import { Eye, Trash2, RefreshCw, Loader2, PanelRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -20,7 +20,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { EstadoBadge, EstadoPagoBadge } from './estado-badge'
+import { FacturaQuickView } from './factura-quick-view'
 import { deleteFactura } from '@/lib/actions/facturas'
 import type { FacturaConProveedor } from '@/lib/actions/facturas'
 
@@ -51,6 +53,7 @@ export function FacturasList({ facturas }: FacturasListProps) {
   const [isPending, startTransition] = useTransition()
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [reprocesandoId, setReprocesandoId] = useState<string | null>(null)
+  const [quickViewId, setQuickViewId] = useState<string | null>(null)
 
   const filtered = facturas.filter((f) => {
     const matchSearch =
@@ -125,7 +128,6 @@ export function FacturasList({ facturas }: FacturasListProps) {
             <TableRow className="bg-muted/50">
               <TableHead>N° Factura</TableHead>
               <TableHead>Proveedor</TableHead>
-              <TableHead className="max-w-[180px]">Descripción</TableHead>
               <TableHead>Fecha</TableHead>
               <TableHead className="text-right">Total Neto</TableHead>
               <TableHead>Estado</TableHead>
@@ -136,7 +138,7 @@ export function FacturasList({ facturas }: FacturasListProps) {
           <TableBody>
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
                   {facturas.length === 0
                     ? 'No hay facturas. Sube la primera con el botón "Nueva Factura".'
                     : 'No hay facturas que coincidan con los filtros.'}
@@ -158,11 +160,6 @@ export function FacturasList({ facturas }: FacturasListProps) {
                     </p>
                   </div>
                 </TableCell>
-                <TableCell className="max-w-[180px]">
-                  <span className="line-clamp-2 text-xs text-muted-foreground">
-                    {factura.informacion ?? '—'}
-                  </span>
-                </TableCell>
                 <TableCell className="text-sm">
                   {formatFecha(factura.fecha_emision)}
                 </TableCell>
@@ -177,6 +174,15 @@ export function FacturasList({ facturas }: FacturasListProps) {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      title="Vista rápida"
+                      onClick={() => setQuickViewId(factura.id)}
+                    >
+                      <PanelRight className="h-4 w-4" />
+                    </Button>
                     {factura.estado === 'error' && (
                       <Button
                         variant="ghost"
@@ -219,6 +225,18 @@ export function FacturasList({ facturas }: FacturasListProps) {
           Mostrando {filtered.length} de {facturas.length} factura{facturas.length !== 1 ? 's' : ''}
         </p>
       )}
+
+      {/* Sheet Vista Rápida */}
+      <Sheet open={quickViewId !== null} onOpenChange={(v) => { if (!v) setQuickViewId(null) }}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+          {quickViewId && (
+            <FacturaQuickView
+              facturaId={quickViewId}
+              onClose={() => setQuickViewId(null)}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
 
       {/* Dialog confirmar eliminación */}
       <Dialog open={deleteId !== null} onOpenChange={(v) => { if (!v) setDeleteId(null) }}>

@@ -202,12 +202,14 @@ export async function saveValidacion(input: SaveValidacionInput) {
     if (distError) return { error: `Error en distribución: ${distError.message}` }
   }
 
-  // 5. Si se valida, guardar memoria en proveedor y registrar log
-  if (input.validar && input.proveedorId) {
+  // 5. Siempre actualizar memoria del proveedor (concepto, categoría, distribución)
+  if (input.proveedorId) {
     await supabase
       .from('proveedores')
       .update({
-        ultimo_concepto: input.concepto.length > 0 ? input.concepto : null,
+        ultimo_concepto: input.concepto.filter(c => c.concepto.trim()).length > 0
+          ? input.concepto.filter(c => c.concepto.trim())
+          : null,
         ultima_categoria: input.categoria || null,
         ultima_distribucion: input.distribuciones.length > 0
           ? input.distribuciones.map(d => ({
@@ -218,7 +220,10 @@ export async function saveValidacion(input: SaveValidacionInput) {
           : null,
       })
       .eq('id', input.proveedorId)
+  }
 
+  // 6. Si se valida, registrar log
+  if (input.validar) {
     await supabase.from('log_procesamiento').insert({
       factura_id: input.facturaId,
       evento: 'validado' as const,

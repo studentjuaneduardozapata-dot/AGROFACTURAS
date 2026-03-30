@@ -26,7 +26,11 @@
       "Bash(python -c \":*)",
       "Bash(node -e \":*)",
       "Bash(node:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(del \"C:\\\\Users\\\\LLANO5\\\\Videos\\\\AGROFACTURAS\\\\src\\\\app\\\\\\(dashboard\\)\\\\facturas\\\\[id]\\\\validar\\\\_components\\\\distribucion-costo.tsx\")",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)"
     ]
   },
   "outputStyle": "default"

@@ -46,10 +46,9 @@ export function CentrosCostoTab({ centros }: CentrosCostoTabProps) {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <p className="text-sm text-muted-foreground">
-          {centros.length}/4 centro{centros.length !== 1 ? 's' : ''} de costo configurado{centros.length !== 1 ? 's' : ''}
-          {centros.length >= 4 && ' · máximo alcanzado'}
+          {centros.length} centro{centros.length !== 1 ? 's' : ''} de costo configurado{centros.length !== 1 ? 's' : ''}
         </p>
-        {centros.length < 4 && <CentroFormDialog />}
+        <CentroFormDialog />
       </div>
 
       <div className="border rounded-lg overflow-hidden">

@@ -81,7 +81,7 @@ export default async function OCPage({ params }: Props) {
   const proveedor = factura.proveedores
   const lineas = factura.lineas_factura
   const distribuciones = factura.distribuciones_costo
-  const concepto = (oc.concepto as ConceptoItem[] | null) ?? []
+  const concepto = ((oc.concepto as ConceptoItem[] | null) ?? []).filter(c => c.concepto)
 
   const impuesto = (factura.iva ?? 0) + (factura.inc ?? 0)
   const retenciones = (factura.rete_fuente ?? 0) + (factura.rete_ica ?? 0)

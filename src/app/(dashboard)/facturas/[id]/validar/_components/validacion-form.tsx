@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { LineasTable } from './lineas-table'
-import { DistribucionCosto } from './distribucion-costo'
 import { EstadoBadge } from '../../../_components/estado-badge'
 import {
   saveValidacion,
@@ -110,7 +109,8 @@ export function ValidacionForm({ factura, centros, conceptos }: ValidacionFormPr
     }))
   )
 
-  // Concepto y categoría
+  // Centros de costo y concepto y categoría
+  const centrosActivos = centros.filter((c) => c.activo)
   const conceptosActivos = conceptos.filter((c) => c.activo)
   const proveedorConcepto = proveedor?.ultimo_concepto as ConceptoItem[] | null
   const [concepto, setConcepto] = useState<ConceptoItem[]>(proveedorConcepto ?? [])
@@ -121,7 +121,8 @@ export function ValidacionForm({ factura, centros, conceptos }: ValidacionFormPr
 
   function puedeValidar() {
     if (!numero_factura || numero_factura === 'PROCESANDO...') return false
-    if (distribuciones.length > 0 && Math.abs(totalDistribucion - 100) > 0.01) return false
+    if (distribuciones.length === 0) return false
+    if (Math.abs(totalDistribucion - 100) > 0.01) return false
     return true
   }
 
@@ -129,7 +130,9 @@ export function ValidacionForm({ factura, centros, conceptos }: ValidacionFormPr
 
   async function handleSave(validar: boolean) {
     if (validar && !puedeValidar()) {
-      if (Math.abs(totalDistribucion - 100) > 0.01) {
+      if (distribuciones.length === 0) {
+        toast.error('Debes asignar al menos 1 centro de costo')
+      } else if (Math.abs(totalDistribucion - 100) > 0.01) {
         toast.error('La distribución de centros de costo debe sumar exactamente 100%')
       }
       return
@@ -260,6 +263,63 @@ export function ValidacionForm({ factura, centros, conceptos }: ValidacionFormPr
         return { ...c, porcentaje: pct }
       })
     )
+  }
+
+  // Distribución de centros de costo helpers
+  function addDistribucion() {
+    if (distribuciones.length >= 4) return
+    const newN = distribuciones.length + 1
+    const perItem = parseFloat((100 / newN).toFixed(2))
+    let assigned = 0
+    const adjusted = distribuciones.map((d, i) => {
+      const isLast = i === distribuciones.length - 1
+      const pct = isLast ? parseFloat((100 - perItem - assigned).toFixed(2)) : perItem
+      if (!isLast) assigned += perItem
+      return { ...d, porcentaje: pct, monto: (pct / 100) * total_neto }
+    })
+    setDistribuciones([
+      ...adjusted,
+      { localId: `d-${Date.now()}`, centro_costo: '', sub_centro: '', porcentaje: perItem, monto: (perItem / 100) * total_neto },
+    ])
+  }
+
+  function removeDistribucion(localId: string) {
+    const remaining = distribuciones.filter((d) => d.localId !== localId)
+    if (remaining.length === 0) { setDistribuciones([]); return }
+    const perItem = parseFloat((100 / remaining.length).toFixed(2))
+    let assigned = 0
+    setDistribuciones(remaining.map((d, i) => {
+      const isLast = i === remaining.length - 1
+      const pct = isLast ? parseFloat((100 - assigned).toFixed(2)) : perItem
+      if (!isLast) assigned += perItem
+      return { ...d, porcentaje: pct, monto: (pct / 100) * total_neto }
+    }))
+  }
+
+  function updateCentroNombre(localId: string, centro_costo: string) {
+    setDistribuciones(distribuciones.map((d) => d.localId === localId ? { ...d, centro_costo } : d))
+  }
+
+  function updateCentroPorcentaje(localId: string, newVal: number) {
+    const clamped = Math.min(100, Math.max(0, newVal))
+    const n = distribuciones.length
+    if (n <= 1) {
+      setDistribuciones(distribuciones.map((d) =>
+        d.localId === localId ? { ...d, porcentaje: clamped, monto: (clamped / 100) * total_neto } : d
+      ))
+      return
+    }
+    const remaining = Math.max(0, 100 - clamped)
+    const perOther = parseFloat((remaining / (n - 1)).toFixed(2))
+    const others = distribuciones.filter((d) => d.localId !== localId)
+    let distributed = 0
+    setDistribuciones(distribuciones.map((d) => {
+      if (d.localId === localId) return { ...d, porcentaje: clamped, monto: (clamped / 100) * total_neto }
+      const isLast = d === others[others.length - 1]
+      const pct = isLast ? parseFloat((remaining - distributed).toFixed(2)) : perOther
+      if (!isLast) distributed += perOther
+      return { ...d, porcentaje: pct, monto: (pct / 100) * total_neto }
+    }))
   }
 
   const yaValidada = factura.estado === 'validada' || factura.estado === 'vinculada'
@@ -528,19 +588,57 @@ export function ValidacionForm({ factura, centros, conceptos }: ValidacionFormPr
         <div className="space-y-6">
 
           {/* Sección: Distribución */}
-          <div className="border rounded-lg p-4 space-y-3">
-            <div>
-              <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
-                Centros de Costo
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Máx. 4 · Debe sumar 100%</p>
+          <div className="border rounded-lg p-4 space-y-4">
+            <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
+              Centros de Costo
+            </h3>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Centro de costo (desglose %)</Label>
+                {centrosActivos.length > 0 && distribuciones.length < 4 && (
+                  <Button variant="ghost" size="sm" onClick={addDistribucion} className="h-6 text-xs gap-1">
+                    <Plus className="h-3 w-3" /> Agregar
+                  </Button>
+                )}
+              </div>
+
+              {centrosActivos.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Sin centros activos. Ve a Configuración → Centros de Costo.
+                </p>
+              )}
+
+              {distribuciones.length === 0 && centrosActivos.length > 0 && (
+                <p className="text-xs text-muted-foreground">Sin distribución asignada.</p>
+              )}
+
+              {distribuciones.map((dist) => (
+                <div key={dist.localId} className="flex gap-2 items-center">
+                  <select
+                    value={dist.centro_costo}
+                    onChange={(e) => updateCentroNombre(dist.localId, e.target.value)}
+                    className="flex-1 h-8 text-xs border rounded-md px-2 bg-background outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Seleccionar...</option>
+                    {centrosActivos.map((c) => (
+                      <option key={c.id} value={c.nombre}>{c.nombre}</option>
+                    ))}
+                  </select>
+                  <Input
+                    type="number"
+                    value={dist.porcentaje}
+                    onChange={(e) => updateCentroPorcentaje(dist.localId, parseFloat(e.target.value) || 0)}
+                    className="w-16 h-8 text-xs text-right"
+                    min={0} max={100} step={0.1}
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                  <button onClick={() => removeDistribucion(dist.localId)} className="text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
             </div>
-            <DistribucionCosto
-              distribuciones={distribuciones}
-              centros={centros}
-              totalNeto={total_neto}
-              onChange={setDistribuciones}
-            />
           </div>
 
           {/* Sección: Concepto y Categoría */}
@@ -640,8 +738,12 @@ export function ValidacionForm({ factura, centros, conceptos }: ValidacionFormPr
                     label: 'Total neto mayor a cero',
                   },
                   {
-                    ok: distribuciones.length === 0 || Math.abs(totalDistribucion - 100) < 0.01,
-                    label: 'Distribución suma 100% (o sin asignar)',
+                    ok: distribuciones.length > 0,
+                    label: 'Al menos 1 centro de costo asignado',
+                  },
+                  {
+                    ok: distribuciones.length > 0 && Math.abs(totalDistribucion - 100) < 0.01,
+                    label: 'Distribución suma 100%',
                   },
                 ].map(({ ok, label }) => (
                   <li key={label} className={`flex items-center gap-2 ${ok ? 'text-green-700' : 'text-muted-foreground'}`}>

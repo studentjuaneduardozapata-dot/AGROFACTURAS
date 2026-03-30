@@ -100,9 +100,10 @@ export function AppSidebar({ userEmail }: AppSidebarProps) {
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger
-                render={
-                  <SidebarMenuButton className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />
-                }
+                data-slot="sidebar-menu-button"
+                data-sidebar="menu-button"
+                data-size="default"
+                className="peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 h-8 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding] group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate"
               >
                 <div className="w-6 h-6 rounded-full bg-sidebar-accent-foreground/20 flex items-center justify-center text-xs font-bold text-sidebar-foreground shrink-0">
                   {userEmail?.[0]?.toUpperCase() ?? 'U'}

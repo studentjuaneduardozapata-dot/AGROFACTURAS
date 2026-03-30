@@ -71,6 +71,36 @@ export async function updateProveedor(id: string, formData: FormData) {
   return { success: true }
 }
 
+export async function createProveedor(formData: FormData): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+
+  const nit = (formData.get('nit') as string)?.trim()
+  const razon_social = (formData.get('razon_social') as string)?.trim()
+
+  if (!nit) return { error: 'El NIT es requerido' }
+  if (!razon_social) return { error: 'La razón social es requerida' }
+
+  const { error } = await supabase.from('proveedores').insert({
+    nit,
+    razon_social,
+    regimen_tributario: (formData.get('regimen_tributario') as string)?.trim() || null,
+    tipo_persona: (formData.get('tipo_persona') as string)?.trim() || null,
+    direccion: (formData.get('direccion') as string)?.trim() || null,
+    telefono: (formData.get('telefono') as string)?.trim() || null,
+    email: (formData.get('email') as string)?.trim() || null,
+  })
+
+  if (error) {
+    if (error.code === '23505') {
+      return { error: `Ya existe un proveedor con el NIT ${nit}` }
+    }
+    return { error: error.message }
+  }
+
+  revalidatePath('/proveedores')
+  return { success: true }
+}
+
 export async function deleteProveedor(id: string) {
   const supabase = await createClient()
 
